@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.25, maximum-scale=3">
 <title>Grilles Jazz</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="styles.css">
@@ -27,6 +27,7 @@
           <button id="new-song-menu-item">Créer une nouvelle grille</button>
           <button id="import-menu-item">Importer des grilles (JSON)</button>
           <button id="export-menu-item">Exporter mes grilles (JSON)</button>
+          <button id="sync-menu-item">Synchroniser les grilles</button>
         </div>
       </div>
     </div>
@@ -44,6 +45,13 @@
     <button id="cancel-new-song" class="ghost">Annuler</button>
   </div>
 
+  <div id="sync-panel" class="new-song-panel" hidden>
+    <span id="sync-summary"></span>
+    <button id="sync-new-only">Ajouter les nouvelles seulement</button>
+    <button id="sync-overwrite" class="ghost">Tout remplacer</button>
+    <button id="sync-cancel" class="ghost">Annuler</button>
+  </div>
+
   <div class="controls">
     <div class="combobox" id="song-combobox">
       <button id="combobox-trigger" class="combobox-trigger" type="button">
@@ -55,15 +63,21 @@
         <div id="song-list" class="song-list"></div>
       </div>
     </div>
-    <div class="field">
-      <label>Tonalité</label>
-      <select id="key-select"></select>
+    <div class="controls-secondary">
+      <div class="field">
+        <label>Tonalité</label>
+        <select id="key-select"></select>
+      </div>
+      <label class="validated-label">
+        <input type="checkbox" id="validated-checkbox"> Vérifiée
+      </label>
+      <button id="edit-mode-btn" class="pill-btn">Édition</button>
     </div>
-    <label class="validated-label">
-      <input type="checkbox" id="validated-checkbox"> Vérifiée
-    </label>
-    <button id="edit-mode-btn" class="pill-btn">Édition</button>
   </div>
+
+  <label class="analyze-label">
+    <input type="checkbox" id="analyze-checkbox"> Analyser la grille (II-V-I, anatoles)
+  </label>
 
   <div id="edit-error" class="error" hidden></div>
 

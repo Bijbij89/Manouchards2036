@@ -10,7 +10,7 @@
    pas de facturation possible dessus), mais ne mets jamais ici une clé que
    tu utilises aussi ailleurs pour un projet sensible.
    ========================================================================== */
-const GEMINI_API_KEY = "AQ.Ab8RN6KwxROHK_6gqDcn2NmvnNeiWyI4MqkVjl5c9AwgF4jpBw";
+const GEMINI_API_KEY = "COLLE_TA_CLE_ICI";
 
 /* ---------- Logique musicale (équivalent JS de model.py) ---------- */
 
@@ -67,6 +67,79 @@ function normalizeTitle(title) {
     return title.replace(/\w\S*/g, (t) => t[0] + t.slice(1).toLowerCase());
   }
   return title;
+}
+
+/* ---------- Analyse harmonique (2-5-1, anatoles) ---------- */
+/* Heuristique sur la chaîne de qualité de l'accord — fonctionne pour les
+   écritures courantes, mais peut se tromper sur des symboles inhabituels. */
+function qualityCategory(quality) {
+  const q = quality.toLowerCase();
+  if (q.includes("m7b5") || q.includes("ø") || q.includes("dim")) return "halfdim_or_dim";
+  if (q.startsWith("maj")) return "major";
+  if (q.startsWith("m") && !q.startsWith("maj")) return "minor";
+  if (q === "" || q.startsWith("6")) return "major";
+  if (/^(7|9|11|13)/.test(q)) return "dominant";
+  return "other";
+}
+
+function analyzeProgressions(bars) {
+  const flat = [];
+  bars.forEach((bar, bi) => {
+    bar.forEach((chord, ci) => {
+      try {
+        const { semitone, quality } = parseChord(chord);
+        flat.push({ bi, ci, semitone, category: qualityCategory(quality) });
+      } catch (e) {
+        flat.push({ bi, ci, semitone: null, category: "other" });
+      }
+    });
+  });
+
+  const highlights = {};
+  const mark = (idxs, type, degrees) => {
+    idxs.forEach((k, n) => {
+      highlights[`${flat[k].bi}-${flat[k].ci}`] = { type, degree: degrees[n] };
+    });
+  };
+
+  for (let i = 0; i + 2 < flat.length; i++) {
+    const [a, b, c] = [flat[i], flat[i + 1], flat[i + 2]];
+    if (a.semitone === null || b.semitone === null || c.semitone === null) continue;
+    const s1 = mod12(b.semitone - a.semitone);
+    const s2 = mod12(c.semitone - b.semitone);
+    if (s1 === 5 && s2 === 5) {
+      if (a.category === "minor" && b.category === "dominant" && c.category === "major") {
+        mark([i, i + 1, i + 2], "251-major", ["II", "V", "I"]);
+      } else if (
+        a.category === "halfdim_or_dim" &&
+        b.category === "dominant" &&
+        c.category === "minor"
+      ) {
+        mark([i, i + 1, i + 2], "251-minor", ["II", "V", "I"]);
+      }
+    }
+  }
+
+  for (let i = 0; i + 3 < flat.length; i++) {
+    const [a, b, c, d] = [flat[i], flat[i + 1], flat[i + 2], flat[i + 3]];
+    if ([a, b, c, d].some((x) => x.semitone === null)) continue;
+    const s1 = mod12(b.semitone - a.semitone);
+    const s2 = mod12(c.semitone - b.semitone);
+    const s3 = mod12(d.semitone - c.semitone);
+    if (
+      s1 === 9 &&
+      s2 === 5 &&
+      s3 === 5 &&
+      a.category === "major" &&
+      b.category === "minor" &&
+      c.category === "minor" &&
+      d.category === "dominant"
+    ) {
+      mark([i, i + 1, i + 2, i + 3], "anatole", ["I", "VI", "II", "V"]);
+    }
+  }
+
+  return highlights;
 }
 
 /* ---------- Icônes ---------- */
@@ -200,6 +273,9 @@ function renderGrid() {
   const bars = transposeBars(song.bars, song.base_key, currentKey);
   columnsCount = bars.length <= 16 ? 4 : 8;
 
+  const analyzeOn = document.getElementById("analyze-checkbox").checked;
+  const highlights = analyzeOn ? analyzeProgressions(bars) : {};
+
   const gridEl = document.getElementById("grid");
   gridEl.style.gridTemplateColumns = editMode
     ? `auto repeat(${columnsCount}, 1fr)`
@@ -236,19 +312,29 @@ function renderGrid() {
       const cell = document.createElement("div");
       cell.className = "bar-cell";
       cell.dataset.index = i;
-      renderBarContent(cell, bars[i]);
+      renderBarContent(cell, bars[i], i, highlights);
       cell.addEventListener("dblclick", () => startEditBar(i));
       gridEl.appendChild(cell);
     }
   }
 }
 
-function renderBarContent(cell, bar) {
+function renderBarContent(cell, bar, barIndex, highlights) {
   cell.innerHTML = "";
+  const hl = (ci) => highlights[`${barIndex}-${ci}`];
+
   if (bar.length === 1) {
     const span = document.createElement("span");
     span.className = "chord chord-single";
     span.textContent = bar[0];
+    const h = hl(0);
+    if (h) {
+      cell.classList.add(`hl-${h.type}`);
+      const label = document.createElement("span");
+      label.className = "degree-label";
+      label.textContent = h.degree;
+      cell.appendChild(label);
+    }
     cell.appendChild(span);
   } else if (bar.length === 2) {
     cell.insertAdjacentHTML(
@@ -261,16 +347,22 @@ function renderBarContent(cell, bar) {
     const bottom = document.createElement("span");
     bottom.className = "chord chord-bottom";
     bottom.textContent = bar[1];
+    const h0 = hl(0);
+    const h1 = hl(1);
+    if (h0) top.classList.add(`hl-${h0.type}`);
+    if (h1) bottom.classList.add(`hl-${h1.type}`);
     cell.appendChild(top);
     cell.appendChild(bottom);
     requestAnimationFrame(() => positionDiagonalText(cell, top, bottom));
   } else {
     const wrap = document.createElement("div");
     wrap.className = "quad";
-    bar.slice(0, 4).forEach((chord) => {
+    bar.slice(0, 4).forEach((chord, ci) => {
       const span = document.createElement("span");
       span.className = "chord chord-quad";
       span.textContent = chord;
+      const h = hl(ci);
+      if (h) span.classList.add(`hl-${h.type}`);
       wrap.appendChild(span);
     });
     cell.appendChild(wrap);
@@ -381,6 +473,10 @@ document.getElementById("validated-checkbox").addEventListener("change", (e) => 
   saveLibrary();
 });
 
+document.getElementById("analyze-checkbox").addEventListener("change", () => {
+  renderGrid();
+});
+
 /* ---------- Menu (créer / importer / exporter) ---------- */
 
 document.getElementById("menu-btn").addEventListener("click", (e) => {
@@ -465,6 +561,49 @@ document.getElementById("export-menu-item").addEventListener("click", () => {
   a.href = URL.createObjectURL(blob);
   a.download = "grilles_export.json";
   a.click();
+});
+
+/* ---------- Synchronisation avec default-songs.json ---------- */
+
+let syncRemote = null;
+let syncNewSlugs = [];
+
+document.getElementById("sync-menu-item").addEventListener("click", async () => {
+  document.getElementById("menu-panel").hidden = true;
+  try {
+    const resp = await fetch(`default-songs.json?t=${Date.now()}`, { cache: "no-store" });
+    syncRemote = await resp.json();
+  } catch (e) {
+    alert("Impossible de récupérer le fichier default-songs.json : " + e.message);
+    return;
+  }
+  const remoteSlugs = Object.keys(syncRemote);
+  syncNewSlugs = remoteSlugs.filter((s) => !(s in library));
+  const existingCount = remoteSlugs.length - syncNewSlugs.length;
+  document.getElementById("sync-summary").textContent =
+    `${syncNewSlugs.length} nouvelle(s) grille(s) sur le serveur, ${existingCount} déjà présente(s) chez toi (potentiellement modifiées).`;
+  document.getElementById("sync-panel").hidden = false;
+});
+
+document.getElementById("sync-new-only").addEventListener("click", () => {
+  syncNewSlugs.forEach((s) => (library[s] = syncRemote[s]));
+  saveLibrary();
+  renderSongList();
+  document.getElementById("sync-panel").hidden = true;
+  alert(`${syncNewSlugs.length} nouvelle(s) grille(s) ajoutée(s). Tes grilles existantes n'ont pas été touchées.`);
+});
+
+document.getElementById("sync-overwrite").addEventListener("click", () => {
+  Object.assign(library, syncRemote);
+  saveLibrary();
+  renderSongList();
+  if (currentSlug) selectSong(currentSlug);
+  document.getElementById("sync-panel").hidden = true;
+  alert("Toutes les grilles du serveur ont remplacé tes versions locales.");
+});
+
+document.getElementById("sync-cancel").addEventListener("click", () => {
+  document.getElementById("sync-panel").hidden = true;
 });
 
 /* ---------- Ajout d'une grille par photo (Gemini) ---------- */
