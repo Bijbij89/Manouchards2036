@@ -154,6 +154,27 @@ function analyzeProgressions(bars) {
     }
   }
 
+  // Le cœur le plus reconnaissable du christophe est souvent juste la
+  // descente IV - IVm(ou IV#dim) - I, même sans le I-I7 devant (ex: dans
+  // "All of Me", c'est juste F-Fm-C). On le détecte aussi indépendamment,
+  // sans écraser une forme longue déjà détectée juste au-dessus.
+  for (let i = 0; i + 2 < flat.length; i++) {
+    const [a, b, c] = [flat[i], flat[i + 1], flat[i + 2]];
+    if ([a, b, c].some((x) => x.semitone === null)) continue;
+    const sameRootAB = mod12(b.semitone - a.semitone) === 0;
+    const semitoneUpAB = mod12(b.semitone - a.semitone) === 1;
+    const expectedIRoot = mod12(a.semitone - 5);
+    if (
+      a.category === "major" &&
+      ((sameRootAB && b.category === "minor") ||
+        (semitoneUpAB && b.category === "halfdim_or_dim")) &&
+      c.semitone === expectedIRoot &&
+      c.category === "major"
+    ) {
+      tryMark([i, i + 1, i + 2], "christophe", ["IV", "IVm", "I"]);
+    }
+  }
+
   // Priorité 2 : II-V-I majeur / mineur
   for (let i = 0; i + 2 < flat.length; i++) {
     const [a, b, c] = [flat[i], flat[i + 1], flat[i + 2]];
@@ -363,20 +384,20 @@ function renderGrid() {
 function fitGridToScreen() {
   const gridEl = document.getElementById("grid");
   if (!gridEl.children.length) return;
+  gridEl.style.transform = "none";
+  gridEl.style.marginBottom = "0px";
   const rect = gridEl.getBoundingClientRect();
-  const reserveBelow = editMode ? 140 : 60; // place pour ce qui suit la grille
+  const reserveBelow = editMode ? 140 : 60;
   const available = window.innerHeight - rect.top - reserveBelow;
-  const scale = Math.min(1, Math.max(available / rect.height, 0.35));
+  if (available <= 0 || rect.height <= available) return;
+  const scale = Math.max(available / rect.height, 0.15);
   gridEl.style.transformOrigin = "top left";
   gridEl.style.transform = `scale(${scale})`;
   const gap = rect.height * (1 - scale);
   gridEl.style.marginBottom = `-${gap}px`;
 }
 
-window.addEventListener("resize", () => requestAnimationFrame(fitGridToScreen));
-window.addEventListener("orientationchange", () => {
-  setTimeout(() => requestAnimationFrame(fitGridToScreen), 250);
-});
+document.getElementById("fit-screen-btn").addEventListener("click", fitGridToScreen);
 
 function renderBarContent(cell, bar, barIndex, highlights) {
   cell.innerHTML = "";
@@ -406,9 +427,10 @@ function renderBarContent(cell, bar, barIndex, highlights) {
     let fillSvg = "";
     if (h0) fillSvg += `<polygon points="0,0 100,0 0,100" fill="${HL_COLORS[h0.type]}"></polygon>`;
     if (h1) fillSvg += `<polygon points="100,0 100,100 0,100" fill="${HL_COLORS[h1.type]}"></polygon>`;
+    const lineColor = h0 && h1 ? "#8a8578" : "#c7c2b8";
     cell.insertAdjacentHTML(
       "beforeend",
-      `<svg class="diagonal-line" viewBox="0 0 100 100" preserveAspectRatio="none">${fillSvg}<line x1="100" y1="0" x2="0" y2="100"></line></svg>`
+      `<svg class="diagonal-line" viewBox="0 0 100 100" preserveAspectRatio="none">${fillSvg}<line x1="100" y1="0" x2="0" y2="100" style="stroke:${lineColor}"></line></svg>`
     );
     const top = document.createElement("span");
     top.className = "chord chord-top";
@@ -493,9 +515,22 @@ function startEditBar(i) {
   cell.appendChild(input);
   input.focus();
   input.select();
-  input.addEventListener("blur", () => saveEditBar(i, input.value));
+
+  const blurHandler = () => saveEditBar(i, input.value);
+  input.addEventListener("blur", blurHandler);
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") input.blur();
+    if (e.key === "Enter") {
+      input.blur();
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      input.removeEventListener("blur", blurHandler);
+      saveEditBar(i, input.value);
+      const total = bars.length;
+      let next = e.shiftKey ? i - 1 : i + 1;
+      if (next < 0) next = total - 1;
+      if (next >= total) next = 0;
+      startEditBar(next);
+    }
   });
 }
 
@@ -563,6 +598,7 @@ document.getElementById("validated-checkbox").addEventListener("change", (e) => 
 });
 
 document.getElementById("analyze-checkbox").addEventListener("change", () => {
+  document.getElementById("analyze-legend").hidden = !document.getElementById("analyze-checkbox").checked;
   renderGrid();
 });
 
@@ -695,6 +731,59 @@ document.getElementById("sync-cancel").addEventListener("click", () => {
   document.getElementById("sync-panel").hidden = true;
 });
 
+/* ---------- Supprimer la grille courante ---------- */
+
+document.getElementById("delete-song-menu-item").addEventListener("click", () => {
+  document.getElementById("menu-panel").hidden = true;
+  if (!currentSlug) return;
+  const title = library[currentSlug].title || currentSlug;
+  if (!confirm(`Supprimer définitivement "${title}" ? C'est irréversible.`)) return;
+  delete library[currentSlug];
+  saveLibrary();
+  const remaining = Object.keys(library).sort();
+  renderSongList();
+  if (remaining.length > 0) {
+    selectSong(remaining[0]);
+  } else {
+    currentSlug = null;
+    document.getElementById("song-title").textContent = "";
+    document.getElementById("song-form").textContent = "";
+    document.getElementById("combobox-label").textContent = "Choisir un morceau";
+    document.getElementById("grid").innerHTML = "";
+  }
+});
+
+/* ---------- Modifier la tonalité d'origine / la structure ---------- */
+
+document.getElementById("edit-info-btn").addEventListener("click", () => {
+  if (!currentSlug) return;
+  const song = library[currentSlug];
+  document.getElementById("edit-base-key").value = song.base_key;
+  document.getElementById("edit-form").value = song.form || "";
+  document.getElementById("edit-info-panel").hidden = false;
+});
+
+document.getElementById("cancel-info-btn").addEventListener("click", () => {
+  document.getElementById("edit-info-panel").hidden = true;
+});
+
+document.getElementById("save-info-btn").addEventListener("click", () => {
+  const newBaseKey = document.getElementById("edit-base-key").value.trim();
+  const newForm = document.getElementById("edit-form").value.trim();
+  try {
+    parseChord(newBaseKey);
+  } catch (e) {
+    alert("Tonalité non reconnue : " + e.message);
+    return;
+  }
+  const song = library[currentSlug];
+  song.base_key = newBaseKey;
+  song.form = newForm;
+  saveLibrary();
+  document.getElementById("edit-info-panel").hidden = true;
+  selectSong(currentSlug);
+});
+
 /* ---------- Ajout d'une grille par photo (Gemini) ---------- */
 
 // Comme pour l'ancien script Python : si "model not found", vérifie le nom
@@ -810,6 +899,17 @@ async function init() {
   if (slugs.length > 0) selectSong(slugs[0]);
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js").catch(console.error);
+    // Sans ça, il faut souvent recharger deux fois (ou faire Ctrl+F5) pour
+    // qu'une mise à jour de l'appli soit réellement prise en compte : le
+    // nouveau service worker s'installe en arrière-plan mais ne prend le
+    // contrôle qu'au rechargement suivant. On force ce rechargement une
+    // seule fois automatiquement dès qu'il prend la main.
+    let refreshed = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshed) return;
+      refreshed = true;
+      window.location.reload();
+    });
   }
 }
 

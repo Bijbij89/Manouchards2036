@@ -64,6 +64,17 @@ départ est là, tout ce qu'ils ajoutent ensuite reste stocké uniquement sur
 leur appareil. Menu ⋮ → Importer/Exporter pour échanger des grilles
 ponctuellement dans un sens ou l'autre.
 
+## Après chaque mise à jour des fichiers
+
+Ouvre `service-worker.js` et incrémente le numéro dans `CACHE_NAME` (ex:
+`grilles-jazz-v3` → `grilles-jazz-v4`), à chaque fois que tu uploades une
+nouvelle version sur GitHub. C'est ce qui permet au navigateur de détecter
+qu'il y a une mise à jour — sans ce changement, il continue de servir
+l'ancienne version en cache indéfiniment, même après un simple F5. L'appli
+se recharge maintenant automatiquement dès qu'elle détecte la mise à jour,
+donc plus besoin de faire Ctrl+F5 à la main — mais l'étape "changer le
+numéro" doit être faite par toi avant de pousser sur GitHub.
+
 ## À savoir
 
 Code non testé dans un vrai navigateur avant envoi — les parties les plus

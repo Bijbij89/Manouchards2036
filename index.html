@@ -13,9 +13,15 @@
     <div class="title-block">
       <h1 id="song-title"></h1>
       <span id="song-form" class="muted"></span>
+      <button id="edit-info-btn" class="icon-btn" title="Modifier tonalité d'origine / structure">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+      </button>
     </div>
     <div class="header-actions">
       <input type="file" id="photo-input" accept="image/*" hidden>
+      <button id="fit-screen-btn" class="icon-btn-lg" title="Ajuster la grille à l'écran">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+      </button>
       <button id="photo-btn" class="icon-btn-lg" title="Ajouter une grille (photo)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
       </button>
@@ -28,6 +34,7 @@
           <button id="import-menu-item">Importer des grilles (JSON)</button>
           <button id="export-menu-item">Exporter mes grilles (JSON)</button>
           <button id="sync-menu-item">Synchroniser les grilles</button>
+          <button id="delete-song-menu-item">Supprimer cette grille</button>
         </div>
       </div>
     </div>
@@ -75,9 +82,21 @@
     </div>
   </div>
 
+  <div id="edit-info-panel" class="new-song-panel" hidden>
+    <label>Tonalité d'origine <input type="text" id="edit-base-key" size="4" placeholder="ex: Bb, Gm"></label>
+    <label>Structure <input type="text" id="edit-form" placeholder="ex: AABA"></label>
+    <button id="save-info-btn">Enregistrer</button>
+    <button id="cancel-info-btn" class="ghost">Annuler</button>
+  </div>
+
   <label class="analyze-label">
-    <input type="checkbox" id="analyze-checkbox"> Analyser la grille (II-V-I, anatoles, christophes)
+    <input type="checkbox" id="analyze-checkbox"> Analyser la grille
   </label>
+  <div id="analyze-legend" class="analyze-legend" hidden>
+    <span class="legend-item"><span class="legend-swatch" style="background:#d7f0d2"></span>II-V-I</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#d2e6f5"></span>Anatoles</span>
+    <span class="legend-item"><span class="legend-swatch" style="background:#f5d6e3"></span>Christophes</span>
+  </div>
 
   <div id="edit-error" class="error" hidden></div>
 

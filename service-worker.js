@@ -1,4 +1,4 @@
-const CACHE_NAME = "grilles-jazz-v2";
+const CACHE_NAME = "grilles-jazz-v4";
 const ASSETS = [
   "./",
   "./index.html",
