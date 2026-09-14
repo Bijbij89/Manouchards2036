@@ -69,7 +69,7 @@ function normalizeTitle(title) {
   return title;
 }
 
-/* ---------- Analyse harmonique (2-5-1, anatoles) ---------- */
+/* ---------- Analyse harmonique (2-5-1, anatoles, christophes) ---------- */
 /* Heuristique sur la chaîne de qualité de l'accord — fonctionne pour les
    écritures courantes, mais peut se tromper sur des symboles inhabituels. */
 function qualityCategory(quality) {
@@ -81,6 +81,19 @@ function qualityCategory(quality) {
   if (/^(7|9|11|13)/.test(q)) return "dominant";
   return "other";
 }
+
+const HL_COLORS = {
+  "251-major": "#d7f0d2",
+  "251-minor": "#d7f0d2",
+  anatole: "#d2e6f5",
+  christophe: "#f5d6e3",
+};
+const HL_TEXT_COLORS = {
+  "251-major": "#2f6b2a",
+  "251-minor": "#2f6b2a",
+  anatole: "#2a5a8a",
+  christophe: "#8a2f57",
+};
 
 function analyzeProgressions(bars) {
   const flat = [];
@@ -95,31 +108,19 @@ function analyzeProgressions(bars) {
     });
   });
 
+  const claimed = new Set();
   const highlights = {};
-  const mark = (idxs, type, degrees) => {
-    idxs.forEach((k, n) => {
-      highlights[`${flat[k].bi}-${flat[k].ci}`] = { type, degree: degrees[n] };
+
+  const tryMark = (idxs, type, degrees) => {
+    const keys = idxs.map((k) => `${flat[k].bi}-${flat[k].ci}`);
+    if (keys.some((k) => claimed.has(k))) return; // déjà pris par une cadence prioritaire
+    keys.forEach((k, n) => {
+      highlights[k] = { type, degree: degrees[n] };
+      claimed.add(k);
     });
   };
 
-  for (let i = 0; i + 2 < flat.length; i++) {
-    const [a, b, c] = [flat[i], flat[i + 1], flat[i + 2]];
-    if (a.semitone === null || b.semitone === null || c.semitone === null) continue;
-    const s1 = mod12(b.semitone - a.semitone);
-    const s2 = mod12(c.semitone - b.semitone);
-    if (s1 === 5 && s2 === 5) {
-      if (a.category === "minor" && b.category === "dominant" && c.category === "major") {
-        mark([i, i + 1, i + 2], "251-major", ["II", "V", "I"]);
-      } else if (
-        a.category === "halfdim_or_dim" &&
-        b.category === "dominant" &&
-        c.category === "minor"
-      ) {
-        mark([i, i + 1, i + 2], "251-minor", ["II", "V", "I"]);
-      }
-    }
-  }
-
+  // Priorité 1 : anatoles (I-VI-II-V)
   for (let i = 0; i + 3 < flat.length; i++) {
     const [a, b, c, d] = [flat[i], flat[i + 1], flat[i + 2], flat[i + 3]];
     if ([a, b, c, d].some((x) => x.semitone === null)) continue;
@@ -127,15 +128,48 @@ function analyzeProgressions(bars) {
     const s2 = mod12(c.semitone - b.semitone);
     const s3 = mod12(d.semitone - c.semitone);
     if (
-      s1 === 9 &&
-      s2 === 5 &&
-      s3 === 5 &&
-      a.category === "major" &&
-      b.category === "minor" &&
-      c.category === "minor" &&
-      d.category === "dominant"
+      s1 === 9 && s2 === 5 && s3 === 5 &&
+      a.category === "major" && b.category === "minor" &&
+      c.category === "minor" && d.category === "dominant"
     ) {
-      mark([i, i + 1, i + 2, i + 3], "anatole", ["I", "VI", "II", "V"]);
+      tryMark([i, i + 1, i + 2, i + 3], "anatole", ["I", "VI", "II", "V"]);
+    }
+  }
+
+  // Priorité 1 également : christophe (I - I7 - IV - IVm7, ou IV° un demi-ton au-dessus)
+  for (let i = 0; i + 3 < flat.length; i++) {
+    const [a, b, c, d] = [flat[i], flat[i + 1], flat[i + 2], flat[i + 3]];
+    if ([a, b, c, d].some((x) => x.semitone === null)) continue;
+    const sameRootAB = mod12(b.semitone - a.semitone) === 0;
+    const fourthAC = mod12(c.semitone - a.semitone) === 5;
+    const sameRootCD = mod12(d.semitone - c.semitone) === 0;
+    const semitoneUpCD = mod12(d.semitone - c.semitone) === 1;
+    if (
+      sameRootAB && fourthAC &&
+      a.category === "major" && b.category === "dominant" && c.category === "major" &&
+      ((sameRootCD && d.category === "minor") ||
+        (semitoneUpCD && d.category === "halfdim_or_dim"))
+    ) {
+      tryMark([i, i + 1, i + 2, i + 3], "christophe", ["I", "I7", "IV", "IVm7"]);
+    }
+  }
+
+  // Priorité 2 : II-V-I majeur / mineur
+  for (let i = 0; i + 2 < flat.length; i++) {
+    const [a, b, c] = [flat[i], flat[i + 1], flat[i + 2]];
+    if (a.semitone === null || b.semitone === null || c.semitone === null) continue;
+    const s1 = mod12(b.semitone - a.semitone);
+    const s2 = mod12(c.semitone - b.semitone);
+    if (s1 === 5 && s2 === 5) {
+      if (a.category === "minor" && b.category === "dominant" && c.category === "major") {
+        tryMark([i, i + 1, i + 2], "251-major", ["II", "V", "I"]);
+      } else if (
+        a.category === "halfdim_or_dim" &&
+        b.category === "dominant" &&
+        c.category === "minor"
+      ) {
+        tryMark([i, i + 1, i + 2], "251-minor", ["II", "V", "I"]);
+      }
     }
   }
 
@@ -277,6 +311,8 @@ function renderGrid() {
   const highlights = analyzeOn ? analyzeProgressions(bars) : {};
 
   const gridEl = document.getElementById("grid");
+  gridEl.style.transform = "none";
+  gridEl.style.marginBottom = "0px";
   gridEl.style.gridTemplateColumns = editMode
     ? `auto repeat(${columnsCount}, 1fr)`
     : `repeat(${columnsCount}, 1fr)`;
@@ -317,11 +353,42 @@ function renderGrid() {
       gridEl.appendChild(cell);
     }
   }
+  requestAnimationFrame(fitGridToScreen);
 }
+
+// Plutôt que de compter sur le pincement du navigateur (qui a des limites
+// variables selon l'appareil et le système), on calcule directement la
+// place disponible et on réduit la grille en conséquence si besoin, pour
+// que toutes les lignes soient toujours visibles sans avoir à zoomer.
+function fitGridToScreen() {
+  const gridEl = document.getElementById("grid");
+  if (!gridEl.children.length) return;
+  const rect = gridEl.getBoundingClientRect();
+  const reserveBelow = editMode ? 140 : 60; // place pour ce qui suit la grille
+  const available = window.innerHeight - rect.top - reserveBelow;
+  const scale = Math.min(1, Math.max(available / rect.height, 0.35));
+  gridEl.style.transformOrigin = "top left";
+  gridEl.style.transform = `scale(${scale})`;
+  const gap = rect.height * (1 - scale);
+  gridEl.style.marginBottom = `-${gap}px`;
+}
+
+window.addEventListener("resize", () => requestAnimationFrame(fitGridToScreen));
+window.addEventListener("orientationchange", () => {
+  setTimeout(() => requestAnimationFrame(fitGridToScreen), 250);
+});
 
 function renderBarContent(cell, bar, barIndex, highlights) {
   cell.innerHTML = "";
   const hl = (ci) => highlights[`${barIndex}-${ci}`];
+
+  const addDegreeLabel = (parent, h) => {
+    const label = document.createElement("span");
+    label.className = "degree-label";
+    label.textContent = h.degree;
+    label.style.color = HL_TEXT_COLORS[h.type];
+    parent.appendChild(label);
+  };
 
   if (bar.length === 1) {
     const span = document.createElement("span");
@@ -329,17 +396,19 @@ function renderBarContent(cell, bar, barIndex, highlights) {
     span.textContent = bar[0];
     const h = hl(0);
     if (h) {
-      cell.classList.add(`hl-${h.type}`);
-      const label = document.createElement("span");
-      label.className = "degree-label";
-      label.textContent = h.degree;
-      cell.appendChild(label);
+      cell.style.background = HL_COLORS[h.type];
+      addDegreeLabel(cell, h);
     }
     cell.appendChild(span);
   } else if (bar.length === 2) {
+    const h0 = hl(0);
+    const h1 = hl(1);
+    let fillSvg = "";
+    if (h0) fillSvg += `<polygon points="0,0 100,0 0,100" fill="${HL_COLORS[h0.type]}"></polygon>`;
+    if (h1) fillSvg += `<polygon points="100,0 100,100 0,100" fill="${HL_COLORS[h1.type]}"></polygon>`;
     cell.insertAdjacentHTML(
       "beforeend",
-      `<svg class="diagonal-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="100" y1="0" x2="0" y2="100"></line></svg>`
+      `<svg class="diagonal-line" viewBox="0 0 100 100" preserveAspectRatio="none">${fillSvg}<line x1="100" y1="0" x2="0" y2="100"></line></svg>`
     );
     const top = document.createElement("span");
     top.className = "chord chord-top";
@@ -347,23 +416,43 @@ function renderBarContent(cell, bar, barIndex, highlights) {
     const bottom = document.createElement("span");
     bottom.className = "chord chord-bottom";
     bottom.textContent = bar[1];
-    const h0 = hl(0);
-    const h1 = hl(1);
-    if (h0) top.classList.add(`hl-${h0.type}`);
-    if (h1) bottom.classList.add(`hl-${h1.type}`);
     cell.appendChild(top);
     cell.appendChild(bottom);
+    if (h0) {
+      const label = document.createElement("span");
+      label.className = "degree-label degree-label-topleft";
+      label.textContent = h0.degree;
+      label.style.color = HL_TEXT_COLORS[h0.type];
+      cell.appendChild(label);
+    }
+    if (h1) {
+      const label = document.createElement("span");
+      label.className = "degree-label degree-label-right";
+      label.textContent = h1.degree;
+      label.style.color = HL_TEXT_COLORS[h1.type];
+      cell.appendChild(label);
+    }
     requestAnimationFrame(() => positionDiagonalText(cell, top, bottom));
   } else {
     const wrap = document.createElement("div");
     wrap.className = "quad";
     bar.slice(0, 4).forEach((chord, ci) => {
+      const quadCell = document.createElement("div");
+      quadCell.className = "chord-quad-cell";
       const span = document.createElement("span");
       span.className = "chord chord-quad";
       span.textContent = chord;
+      quadCell.appendChild(span);
       const h = hl(ci);
-      if (h) span.classList.add(`hl-${h.type}`);
-      wrap.appendChild(span);
+      if (h) {
+        quadCell.style.background = HL_COLORS[h.type];
+        const label = document.createElement("span");
+        label.className = "degree-label degree-label-quad";
+        label.textContent = h.degree;
+        label.style.color = HL_TEXT_COLORS[h.type];
+        quadCell.appendChild(label);
+      }
+      wrap.appendChild(quadCell);
     });
     cell.appendChild(wrap);
   }

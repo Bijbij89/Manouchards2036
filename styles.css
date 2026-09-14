@@ -144,20 +144,24 @@ button.pill-btn.active { background: var(--accent); color: #fff; }
 .chord-top, .chord-bottom { position: absolute; font-size: 1.05em; }
 .diagonal-line { position: absolute; inset: 0; width: 100%; height: 100%; }
 .diagonal-line line { stroke: var(--border); stroke-width: 1.5; }
-.quad { display: grid; grid-template-columns: 1fr 1fr; gap: 0.15em; width: 100%; height: 100%; padding: 0.3em; }
-.chord-quad { font-size: 1em; display: flex; align-items: center; justify-content: center; }
+.quad { display: grid; grid-template-columns: 1fr 1fr; gap: 0.12em; width: 100%; height: 100%; }
+.chord-quad-cell {
+  position: relative; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+}
+.chord-quad { font-size: 1em; }
 .bar-edit-input {
   width: 100%; height: 100%; border: none; background: transparent;
   text-align: center; font-weight: 600; font-size: 1.1em; outline: none; padding: 0;
 }
 
-.hl-251-major { background: #d7f0d2 !important; }
-.hl-251-minor { background: #d7f0d2 !important; }
-.hl-anatole { background: #d2e6f5 !important; }
 .degree-label {
-  position: absolute; bottom: 2px; left: 4px; font-size: 0.6em;
-  font-weight: 700; color: #5a5a5a; letter-spacing: 0.02em;
+  position: absolute; bottom: 2px; left: 4px; font-size: 0.78em;
+  font-weight: 800; letter-spacing: 0.02em;
 }
+.degree-label-topleft { bottom: auto; top: 2px; left: 4px; }
+.degree-label-right { bottom: 2px; left: auto; right: 4px; }
+.degree-label-quad { bottom: 1px; left: 3px; font-size: 0.7em; }
 
 .add-remove-row { display: flex; gap: 0.5em; margin-bottom: 1em; }
 .upload-status { margin-top: 0.6em; min-height: 1.2em; }
